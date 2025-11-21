@@ -1,0 +1,536 @@
+---
+title: "Project 2"
+author: "Myreen Malik"
+date: "2025-11-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+## Introduction
+
+In the United States, homelessness is a persistent and complicated social issue, affecting individuals, families, and entire communities. To better understand patterns and trends in homelessness, the U.S. Department of Housing and Urban Development (HUD) conducts annual Point-in-Time (PIT) counts, which estimate the number of people experiencing homelessness on a single night in January. These data include total homelessness counts as well as subcategories such as sheltered, unsheltered, chronic, and veteran homelessness.
+
+The primary dataset used in this project was obtained from HUD’s PIT count database, which provides annual state-level homelessness estimates from **2007 to 2024**. The dataset can be accessed here:
+
+**HUD PIT Counts (2007–2024):** <https://www.huduser.gov/portal/sites/default/files/xls/2007-2024-PIT-Counts-by-State.xlsb>
+
+Because homelessness must be understood within the context of broader population trends, state-level population estimates for each year were added using a second dataset sourced from the U.S. Census Bureau. The dataset was obtained through a publicly available GitHub repository:
+
+**State Population by Year:** <https://github.com/JoshData/historical-state-population-csv/blob/primary/historical_state_population_by_year.csv>
+
+I chose to analyze homelessness data because it is a major social issue in the United States, and discussions about its causes, trends, and policy responses are extremely common yet often misunderstood. The HUD Point-in-Time (PIT) dataset provides nationally consistent, long-term record of homelessness counts across all 50 states. Since the data are collected using the same federal standards each year, they allow for meaningful comparisons over time and across states.
+
+In this project, I investigate several key questions about homelessness in the United States between 2007 and 2024. Specifically, I explore:
+
+-   **How the overall proportion of homelessness has changed over time**, and how sheltered and unsheltered homelessness differ in their trends.
+
+-   **Whether homelessness proportions vary significantly from state to state**, and whether these geographic differences have changed over time.
+
+-   **How homelessness relates to structural factors**, such as the number of Continuums of Care (CoCs) within a state, which serve as the local administrative bodies overseeing homeless services.
+
+    ![](images/clipboard-2295905168.webp)
+
+    Picture Citation: “Understanding the Problem of Homelessness.” *FUSION Federal Way*, 23 Oct. 2023, fusionhousing.org/understanding-the-problem-of-homelessness/
+
+```{r, echo=FALSE, include=FALSE}
+library(lubridate)
+library(readr)
+library(dplyr)
+
+# load both of my datasets
+homelessness = read.csv("homelessness - Sheet1.csv")
+
+population = read.csv("historical_state_population_by_year.csv")
+
+# converts numbers to ints for homeless dataset
+homelessness$Total_Homelessness = parse_number(homelessness$Total_Homelessness, locale = locale(grouping_mark = ","))
+
+homelessness$Sheltered_Homeless = parse_number(homelessness$Sheltered_Homeless, locale = locale(grouping_mark = ","))
+
+homelessness$Unsheltered_Homeless = parse_number(homelessness$Unsheltered_Homeless, locale = locale(grouping_mark = ","))
+
+# getting rid of rows w/ na values
+homelessness = na.omit(homelessness)
+
+# merge datasets
+merged = left_join(homelessness, population, by = c("State", "Year"))
+
+# getting rid of rows with population = NA
+merged = merged|>filter(!is.na(Population))
+
+## new variables
+
+# var 1 - proportion of total to population
+merged = mutate(merged, prop_homeless = Total_Homelessness/Population)
+
+# var 2 - proportion of sheltered to total homelessness
+merged = mutate(merged, prop_sheltered_of_total=  Sheltered_Homeless/Total_Homelessness)
+
+# var 3 - proportion of unsheltered to total
+merged = mutate(merged, prop_unsheltered_of_total = Unsheltered_Homeless/Total_Homelessness)
+
+# num of observations
+row = nrow(merged)
+col = ncol(merged)
+total = row * col
+total
+```
+
+## Data Preparation
+
+The data for this project came from two separate sources. The first dataset, containing annual state-level homelessness counts from 2007–2024, was downloaded directly from the U.S. Department of Housing and Urban Development (HUD). This file includes variables such as total homelessness, sheltered and unsheltered homelessness, and the number of Continuums of Care (CoCs) per state. The second dataset, containing yearly state population estimates, was obtained as a CSV from a GitHub repository that compiles historical Census population data.
+
+For the HUD dataset, it included a lot of variables that I wouldn't have needed, as well as one different tab on the same spreadsheet for each year from 2007-2024. One challenge that I faced was figuring out how to combine all of the tabs in the spreadsheet in R studio, as I couldn't figure out how to get it to format the way that I wanted to with just a loop. So, to speed up the process, I decided to manually format the data that I wanted from the datasets in Google Sheets, giving me more autonomy over the avriables I wanted to pull from my data as well as how I wanted the overall dataframe to look like. Once I prepared this spreadsheet on Google Sheets, I saved it as a .csv file and imported it into R.
+
+As for population data, one barrier that I encountered was that on the US Census, it was difficult to find data that was already formatted the way I wanted to - with state populations and over the years. So, rather than scraping the data on my own, I found a pre-made dataset on [Github](https://github.com/JoshData/historical-state-population-csv/blob/primary/historical_state_population_by_year.csv) where someone already made the exact dataset that I wanted with state and year populations.
+
+Once I found both datasets and made the necessary changes, I imported both datasets into R using the readr package.
+
+After importing, I had to clean the data, starting with my homelessness dataset. First of all, the numbers in 3 of my key variables - Total_Homelessness, Sheltered_Homelessness, and Unsheltered_Homelessness - were originally strings, meaning that I wouldn't be able to do normal numeric functions with them. So, I converted these columns to integers so all of my data would be numbers.
+
+Secondly, there were some rows in my homelessness dataset that had no data at all besides the state name, namely the states AS and MP, or American Samoa and Nothern Mariana Islands, both US territories. Since there was no homelessness data for each of these territories, I decided to take them out of the dataset, or, in other words, omit my NA values.
+
+There were no NA values in the Population dataset, so from here I merged both of my datasets by the variables "State" and "Year". After doing this, I noticed that there were states or territires that had homelessness data but no population data. This would not work for my analysis because in order to come to any colclusion about homelessness rates, it is important to look at the proportion of homelessness rather than the raw numbers so you can fairly comapre states with different overall populations. Therefore, I decided to omit any rows with NA in the population column.
+
+Lastly, I made 3 new variables for my analysis. The first one was the proportion of total homelessness to population for each state per year (prop_homeless), the second one was the proportion of sheltered homelessness to total homelessness (prop_sheltered_of_total), and the third one was the proportion of unsheltered homelessness to total homelessness (prop_unsheltered_of_total). These new variables allowed me to analyze proportions rather than raw numbers to account for differences in state sizes at different points of time.
+
+After all of these changes, I was left with a dataset with `r row` rows and `r col` columns, and a total of `r total` observations.
+
+## Variable Description
+
+After cleaning my data and merging my datasets, I made a subset called homeless_subset, where I have ten variables. Below is a table that lists my variables, their data types, and their description.
+
+```{r, echo=FALSE}
+library(dplyr)
+library(tibble)
+
+# subset w/ cleaned data
+homeless_subset = subset(merged)
+
+# make formatted table with variables, type, and description
+var_names  <- c(
+  "Year",
+  "State",
+  "Number.of.CoCs",
+  "Total_Homelessness",
+  "Sheltered_Homeless",
+  "Unsheltered_Homeless",
+  "Population",
+  "prop_homeless",
+  "prop_sheltered_of_total",
+  "prop_unsheltered_of_total"
+)
+
+data_dict <- tibble(
+  Variable = var_names,
+  Type = sapply(homeless_subset[var_names], function(x) paste(class(x), collapse = " / ")), description = c(
+    "Year of the count",
+    "State or territory (two-letter abbreviation)",
+    "Number of Continuums of Care in the state",
+    "Total number of people experiencing homelessness",
+    "Number of people in sheltered homelessness",
+    "Number of people in unsheltered homelessness",
+    "Total state population",
+    "Proportion of population that is homeless",
+    "Share of homeless who are sheltered",
+    "Share of homeless who are unsheltered"
+  )
+)
+
+knitr::kable(data_dict, align = "l")
+
+```
+
+## Univariate Analyses
+
+For my univariate analyses, I chose to analyze the following variables: Number.of.CoCs, prop_homeless, prop_sheltered_of_total, and prop_unsheltered_of_total
+
+### Number of CoCs Univariate Analysis
+
+To understand how homelessness is organized and managed across the country, I first examined the distribution of **Continuums of Care (CoCs)** - the regional organizations responsible for coordinating homeless services. Each state has anywhere from a few to several dozen CoCs, and this variation may influence how homelessness is reported and addressed.
+
+**Mean** number of CoCs: `r mean(homeless_subset$Number.of.CoCs, na.rm = TRUE)`
+
+**Median** number of CoCs: `r median(homeless_subset$Number.of.CoCs, na.rm = TRUE)`
+
+**Five-number summary** (min, Q1, median, Q3, max): `r paste(fivenum(homeless_subset$Number.of.CoCs, na.rm = TRUE), collapse = ", ")`
+
+These statistics show that the distribution of CoCs is **heavily right-skewed**: most states/counties have only a handful of CoCs, while a small number have very high counts (up to 44).
+
+The histogram shows a **cluster of values between 1 and 10**, with a sharp peak around 1–4 CoCs. This reflects the fact that many states or regions operate under **one statewide CoC**, and that some populous states (CA, NY, FL, TX) have **many more CoCs**, creating the long right tail.
+
+Overall, the pattern suggests that CoC distribution is **uneven**, likely due to differences in population size, geography, policy structure, or administrative organization.
+
+The line graph displays the **average number of CoCs per state each year**. The trend shows a **gradual decline** from about 8.9 in 2007 to around 7.5 in recent years.
+
+This decrease likely reflects national policy shifts, including the consolidation of smaller CoCs into larger regional ones and the standardization and restructuring efforts by HUD, and increasing encouragement for statewide or regional coordination. Although the change is not dramatic, it indicates that the national CoC structure has become **slightly more centralized over time**.
+
+Overall, the number of Continuums of Care (CoCs) in the United States is highly uneven, with most states reporting only a few CoCs and a small number reporting many more. The summary statistics and histogram together show a strongly right-skewed distribution, indicating that while the typical state has relatively few CoCs, a handful of states contribute disproportionately to the national total.
+
+```{r, echo=FALSE, include=FALSE}
+#prop CoCs - univariate
+
+library(ggplot2)
+# basic stats for number of CoCs
+mean(homeless_subset$Number.of.CoCs)
+
+median(homeless_subset$Number.of.CoCs)
+
+fivenum(homeless_subset$Number.of.CoCs)
+
+```
+
+```{r, echo=FALSE}
+# graph overall 
+total_cocs_graph = ggplot(homeless_subset, aes(Number.of.CoCs)) + geom_histogram(fill="tomato") + labs(title = "Distribution of Number of CoCs in the USA", x = "Total Number of CoCs", y="Frequency") + theme_minimal()
+total_cocs_graph
+
+# graph by year 
+cocs_year_graph = homeless_subset |> group_by(Year) |> summarize(mean_cocs = mean(Number.of.CoCs, na.rm = TRUE)) |> ggplot(aes(x = Year, y = mean_cocs)) + geom_line(col="tomato") + geom_point() + labs(title = "Mean Number of CoCs per Year in the USA from 2007-2024", x = "Year", y="Frequency") + theme_minimal()
+cocs_year_graph
+```
+
+### Proportion of Homeless Population Univariate Analysis
+
+To better understand homelessness relative to population size, I examined the variable `prop_homeless`, which measures the proportion of each state’s population experiencing homelessness in a given year. Across all observations, the **mean** proportion homeless is `r mean(homeless_subset$prop_homeless, na.rm = TRUE)`, and the **median** is `r median(homeless_subset$prop_homeless, na.rm = TRUE)`. The five-number summary (minimum, first quartile, median, third quartile, maximum) is:
+
+`r paste(signif(fivenum(homeless_subset$prop_homeless, na.rm = TRUE), 6), collapse = ", ")`
+
+These values show that most states have homelessness proportions below one percent, with only a small number of state-years reaching unusually high levels.
+
+The histogram of `prop_homeless` reveals a strongly **right-skewed distribution**, with the majority of state-year observations falling between roughly 0.0002 and 0.002. This indicates that in a typical state and year, **less than 0.3%** of the population is homeless. The long right tail highlights a few states with significantly higher proportions in specific years.
+
+When looking at trends over time, the plot of the *average proportion homeless per year* shows that homelessness was relatively higher in the late 2000s, then **gradually declined** through the mid-2010s. Around 2020, there is a noticeable dip followed by an **uptick in recent years**, suggesting that homelessness rates may be rising again following the COVID-19 pandemic period.
+
+```{r, echo=FALSE, include=FALSE}
+#prop total homelessness - univariate
+
+# basic stats
+mean(homeless_subset$prop_homeless)
+
+median(homeless_subset$prop_homeless)
+
+fivenum(homeless_subset$prop_homeless)
+
+```
+
+```{r, echo=FALSE}
+# graph for prop homelessness - univariate
+prop_homelessness_graph = ggplot(homeless_subset, aes(prop_homeless)) + geom_histogram(fill="goldenrod") + labs(title = "Distribution of Proportion of Homeless Population in the USA", x = "Proportion of Homelessness", y="Frequency") + theme_minimal()
+prop_homelessness_graph
+
+# graph by year 
+prop_homelessness_year = homeless_subset |> group_by(Year) |> summarize(mean_prop_homeless = mean(prop_homeless, na.rm = TRUE)) |> ggplot(aes(x = Year, y = mean_prop_homeless)) + geom_line(col="goldenrod") + geom_point() + labs(title = "Average Proportions of Homeless Population in the USA per Year from 2007-2024", x = "Year", y="Proportions") + theme_minimal()
+prop_homelessness_year
+```
+
+#### Proportion on Sheltered in Homeless Population Univariate Analysis
+
+The variable `prop_sheltered_of_total` measures the **share of the homeless population that is sheltered** in each state-year. Across all observations, the **mean** proportion sheltered is `r mean(homeless_subset$prop_sheltered_of_total, na.rm = TRUE)`, and the **median** is `r median(homeless_subset$prop_sheltered_of_total, na.rm = TRUE)`. The five-number summary (minimum, first quartile, median, third quartile, maximum) is:
+
+`r paste(signif(fivenum(homeless_subset$prop_sheltered_of_total, na.rm = TRUE), 6), collapse = ", ")`
+
+These values indicate that in a typical state and year, **roughly half** of people experiencing homelessness are sheltered, with most observations falling between about 0.36 and 0.61. However, there are some state–years where fewer than 20% or more than 90% of people experiencing homelessness are sheltered, showing substantial variability in how states rely on shelter systems.
+
+The histogram of `prop_sheltered_of_total` shows a fairly broad distribution centered around 0.5. Unlike the proportion of homelessness in the general population, which is highly right-skewed, the sheltered proportion is more spread out, suggesting that states differ widely in whether most people experiencing homelessness are sheltered or unsheltered.
+
+When averaging `prop_sheltered_of_total` by year, the line plot reveals a **clear upward trend** over time. On average, the proportion of the homeless population who are sheltered increases from around 0.39 in the late 2000s to a peak of over 0.6 around 2021, followed by a slight decline but remaining well above early-year levels. This suggests that, nationally, a growing share of people experiencing homelessness were being sheltered over much of the study period, even as overall homelessness levels changed.
+
+```{r, echo=FALSE, include=FALSE}
+#prop sheltered homelessness - univariate
+
+# basic stats
+mean(homeless_subset$prop_sheltered_of_total)
+
+median(homeless_subset$prop_sheltered_of_total)
+
+fivenum(homeless_subset$prop_sheltered_of_total)
+
+```
+
+```{r, echo=FALSE}
+# graph for prop sheltered homelessness
+sheltered_homelessness_graph = ggplot(homeless_subset, aes(prop_sheltered_of_total)) + geom_histogram(fill="steelblue") + labs(title = "Distribution of Proportion of Sheltered Homeless Population in the USA", x = "Proportion of Sheltered Homelessness", y="Frequency") + theme_minimal()
+sheltered_homelessness_graph
+
+# graph by year 
+sheltered_homelessness_year = homeless_subset |> group_by(Year) |> summarize(mean_sheltered_homeless = mean(prop_sheltered_of_total, na.rm = TRUE)) |> ggplot(aes(x = Year, y = mean_sheltered_homeless)) + geom_line(col="steelblue") + geom_point() + labs(title = "Average Proportions of Sheltered Homeless Population in the USA per Year from 2007-2024", x = "Year", y="Proportion of Sheltered Homelessness") + theme_minimal()
+sheltered_homelessness_year
+```
+
+#### Proportion on Unsheltered in Homeless Population Univariate Analysis
+
+The variable `prop_unsheltered_of_total` measures the **share of the homeless population that is unsheltered** in each state-year. Across all observations, the **mean** unsheltered proportion is `r mean(homeless_subset$prop_unsheltered_of_total, na.rm = TRUE)`, and the **median** is `r median(homeless_subset$prop_unsheltered_of_total, na.rm = TRUE)`. The five-number summary (minimum, first quartile, median, third quartile, maximum) is:
+
+`r paste(signif(fivenum(homeless_subset$prop_unsheltered_of_total, na.rm = TRUE), 6), collapse = ", ")`
+
+These values indicate that, on average, roughly **one-quarter** of people experiencing homelessness are unsheltered, but there is substantial variability. In some state–years, essentially 0% of the homeless population is unsheltered, while in others more than 80% are unsheltered.
+
+The histogram of `prop_unsheltered_of_total` shows a distribution that is concentrated between about 0.10 and 0.40, with a longer right tail extending to higher proportions. This suggests that many states have relatively low to moderate levels of unsheltered homelessness, but a subset of states experience much higher unsheltered rates, where a large majority of people experiencing homelessness are living in places not meant for habitation.
+
+When `prop_unsheltered_of_total` is averaged by year, the line plot reveals a **nonlinear pattern over time**. Unsheltered proportions start relatively high in the late 2000s, decline into the mid-2010s, and then reach a low point around 2021. In the most recent years, however, the average unsheltered proportion rises again, suggesting that a growing share of people experiencing homelessness are living unsheltered despite earlier gains in sheltering.
+
+```{r, echo=FALSE, include=FALSE}
+#prop unsheltered homelessness - univariate
+
+# basic stats
+mean(homeless_subset$prop_unsheltered_of_total)
+
+median(homeless_subset$prop_unsheltered_of_total)
+
+fivenum(homeless_subset$prop_unsheltered_of_total)
+
+```
+
+```{r, echo=FALSE}
+# graph for prop unsheltered homelessness
+unsheltered_homelessness_graph = ggplot(homeless_subset, aes(prop_unsheltered_of_total)) + geom_histogram(fill="seagreen3") + labs(title = "Distribution of Proportion of Unsheltered Homeless Population in the USA", x = "Proportion of Unsheltered Homelessness", y="Frequency") + theme_minimal()
+unsheltered_homelessness_graph
+
+# graph by year 
+unsheltered_homelessness_year = homeless_subset |> group_by(Year) |> summarize(mean_unsheltered_homeless = mean(prop_unsheltered_of_total, na.rm = TRUE)) |> ggplot(aes(x = Year, y = mean_unsheltered_homeless)) + geom_line(col="seagreen3") + geom_point() + labs(title = "Average Proportions of Unsheltered Homeless Population in the USA per Year from 2007-2024", x = "Year", y="Proportion of Unsheltered Homelessness") + theme_minimal()
+unsheltered_homelessness_year
+```
+
+## Multivariate Analyses
+
+#### Sheltered Vs Unsheltered Populations Overtime
+
+To examine how the proportions of sheltered and unsheltered homelessness have changed over time, I computed the yearly averages of each measure and plotted both trends together.
+
+The graph shows a clear and consistent gap between sheltered and unsheltered populations. Across all years, the proportion of homeless individuals living in sheltered conditions is substantially higher than the proportion experiencing unsheltered homelessness. Sheltered homelessness increases notably from around **2014–2021**, peaking during 2021, before decreasing slightly and stabilizing. Unsheltered homelessness, in contrast, remains lower overall but shows smaller fluctuations, including a noticeable dip in 2021 before rising again.
+
+To formally test whether the average proportion of sheltered homelessness differs from the average proportion of unsheltered homelessness, I conducted a paired t-test. The test results show a **highly significant difference** between the two proportions (`p-value < 2.2e-16`). The estimated mean difference is approximately **0.231**, with a 95% confidence interval of **0.210 to 0.252**, indicating that, on average, the sheltered proportion is over 20 percentage points higher than the unsheltered proportion.
+
+Overall, the multivariate comparison demonstrates that sheltered homelessness consistently makes up the larger share of the homeless population in every year studied, and the statistical test confirms that this difference is both large and statistically significant.
+
+```{r, echo=FALSE}
+library(scales)
+
+# graph 1
+# compare sheltered to unsheltered proportions
+
+sheltered_vs_unsheltered = homeless_subset |>
+  group_by(Year) |>
+  summarize(
+    prop_sheltered   = mean(prop_sheltered_of_total,   na.rm = TRUE),
+    prop_unsheltered = mean(prop_unsheltered_of_total, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = prop_sheltered,   color = "Sheltered"), linewidth = 1.1) +
+  geom_point(aes(y = prop_sheltered,  color = "Sheltered")) +
+  geom_line(aes(y = prop_unsheltered, color = "Unsheltered"), linewidth = 1.1) +
+  geom_point(aes(y = prop_unsheltered, color = "Unsheltered")) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_color_manual(
+    values = c("Sheltered" = "steelblue", "Unsheltered" = "tomato"),
+    name   = "Category"
+  ) +
+  labs(
+    title = "Proportion Sheltered vs Unsheltered Over Time",
+    x = "Year",
+    y = "Proportion of homeless population"
+  ) +
+  theme_minimal()
+sheltered_vs_unsheltered
+```
+
+```{r, echo=FALSE, include=FALSE}
+
+# statistical testing
+homeless_subset$difference = homeless_subset$prop_sheltered_of_total - homeless_subset$prop_unsheltered_of_total
+
+t.test(homeless_subset$prop_sheltered_of_total, homeless_subset$prop_unsheltered_of_total, paired = TRUE)
+```
+
+#### Homelessness VS CoCs
+
+To explore whether regions with more Continuums of Care (CoCs) tend to have higher or lower homelessness rates, I created a scatterplot of the proportion of the population experiencing homelessness against the number of CoCs in each area. The scatterplot reveals substantial variability in homelessness rates across all CoC counts, with most areas displaying relatively low proportions of homelessness regardless of the number of CoCs. Although the fitted regression line shows a slight upward trend, the visual relationship appears very weak, suggesting only a minor positive association, if any, between homelessness prevalence and the number of administrative CoCs.
+
+To statistically test this relationship, I conducted both a correlation test and a simple linear regression.
+
+The Pearson correlation coefficient was **r = 0.069**, with a **p-value = 0.035**, indicating a statistically significant but extremely weak positive correlation between the number of CoCs and the homelessness rate. The confidence interval (0.0048 to 0.1336) confirms that the true correlation, while above zero, remains very small in magnitude.
+
+The linear regression results further support this interpretation. The coefficient for `Number.of.CoCs` is **1.27 × 10⁻⁵** (p = 0.035), indicating that each additional CoC is associated with only a **0.0013% increase** in the homelessness proportion. The model explains very little of the variation in homelessness rates (R² = 0.0048), meaning the number of CoCs is not a meaningful predictor of homelessness prevalence.
+
+Overall, while the results are statistically significant due to the large sample size, the effect size is almost nonexistent. There is no practically meaningful relationship between the number of CoCs in a region and the rate of homelessness.
+
+```{r, echo=FALSE}
+# graph 2
+# compare prop homelessness to cocs
+
+prop_homeless_vs_cocs = ggplot(homeless_subset,
+       aes(x = Number.of.CoCs, y = prop_homeless)) +
+  geom_point(alpha = 0.4, color = "steelblue") +
+  geom_smooth(method = "lm", color = "darkred", linewidth = 1) +
+  labs(
+    title = "Relationship Between Homelessness Rate and Number of CoCs",
+    x = "Number of CoCs",
+    y = "Proportion of Population Homeless"
+  ) +
+  theme_minimal()
+prop_homeless_vs_cocs
+
+```
+
+```{r, echo=FALSE, include=FALSE}
+
+# statistical testing
+
+# correlation test
+cor.test(homeless_subset$Number.of.CoCs,
+         homeless_subset$prop_homeless)
+
+# linear regression
+summary(lm(prop_homeless ~ Number.of.CoCs, data = homeless_subset))
+
+```
+
+#### Sheltered and Unsheltered VS CoCs
+
+To investigate whether areas with more Continuums of Care (CoCs) tend to have different *types* of homelessness, I plotted the proportion of the homeless population that is sheltered and unsheltered against the number of CoCs. The scatterplot with two regression lines shows a large amount of variability at every CoC level, but a clear pattern in the fitted trends: that the **sheltered** proportion has a slightly **negative** slope as CoCs increase, and the **unsheltered** proportion has a slightly **positive** slope.
+
+In other words, places with more CoCs tend to have a somewhat **higher share of unsheltered homelessness and a somewhat lower share of sheltered homelessness**, although the points are widely scattered.
+
+To formally compare the levels of sheltered and unsheltered homelessness overall, a paired t-test again shows a very large and statistically significant difference between the two proportions (t = 21.71, df = 917, p \< 2.2 × 10⁻¹⁶). On average, the sheltered proportion is about **0.23 (23 percentage points)** higher than the unsheltered proportion, with a 95% confidence interval from 0.21 to 0.25.
+
+Next, I examined how each proportion is related to CoCs separately. The correlation between the number of CoCs and the **sheltered** proportion is slightly negative (r ≈ −0.061) and not statistically significant at the 0.05 level (p ≈ 0.065), suggesting **no meaningful linear relationship**. In contrast, the correlation between CoCs and the **unsheltered** proportion is positive and statistically significant (r ≈ 0.174, p ≈ 1.2 × 10⁻⁷). The linear regression coefficients are consistent with this pattern: the slope for the sheltered proportion is about **−0.0012** per CoC, while the slope for the unsheltered proportion is about **0.0036** per CoC.
+
+Overall, these results suggest that areas with more CoCs do **not** have lower overall homelessness rates, and they also tend to have a **slightly higher share of unsheltered homelessness and a slightly lower share of sheltered homelessness**. The effects are modest in size, but they imply that a larger CoC infrastructure is more characteristic of high-need regions than of places where homelessness is largely contained within shelters.
+
+```{r, echo=FALSE}
+# graph 3
+# compare sheltered and unsheltered vs cocs
+sh_and_unsh_vs_cocs = ggplot(homeless_subset, aes(x = Number.of.CoCs)) +
+  geom_point(aes(y = prop_sheltered_of_total, color = "Sheltered"), alpha=0.4) +
+  geom_point(aes(y = prop_unsheltered_of_total, color = "Unsheltered"), alpha=0.4) +
+  geom_smooth(aes(y = prop_sheltered_of_total, color = "Sheltered"), method="lm") +
+  geom_smooth(aes(y = prop_unsheltered_of_total, color = "Unsheltered"), method="lm") +
+  scale_color_manual(values = c("Sheltered"="steelblue", "Unsheltered"="tomato")) +
+  labs(title="Relationship Between CoC Density and Shelter/Unsheltered Rates",
+       x="Number of CoCs",
+       y="Proportion",
+       color="Category") +
+  theme_minimal()
+
+sh_and_unsh_vs_cocs
+
+```
+
+```{r, echo=FALSE, include=FALSE}
+# statistcial analysis
+
+t.test(homeless_subset$prop_sheltered_of_total,
+       homeless_subset$prop_unsheltered_of_total,
+       paired = TRUE)
+
+cor.test(homeless_subset$Number.of.CoCs, homeless_subset$prop_sheltered_of_total)
+cor.test(homeless_subset$Number.of.CoCs, homeless_subset$prop_unsheltered_of_total)
+
+lm(homeless_subset$prop_sheltered_of_total ~ homeless_subset$Number.of.CoCs)
+lm(homeless_subset$prop_unsheltered_of_total ~ homeless_subset$Number.of.CoCs)
+
+```
+
+#### Homelessness Per State from 2007 - 2024
+
+To visualize how homelessness varies across the country, I created maps of the **proportion of the population experiencing homelessness** by state for 2007 and 2024 using a custom mapping function.
+
+In both years, homelessness is not evenly distributed across the United States. The 2007 map already shows **higher homelessness proportions in West Coast states** (such as California, Oregon, and Washington) and parts of the Northeast, while many Midwestern and Southern states have comparatively lower rates. By 2024, this geographic pattern becomes even more pronounced: several **coastal states and Alaska** appear in the highest color categories, indicating that they have some of the largest homelessness proportions in the country, whereas many interior states remain in the lowest categories. These maps highlight strong and persistent regional disparities in homelessness.
+
+To formally test whether homelessness proportions differ by **state** and **year**, I did a two-way ANOVA model. The ANOVA results show a **very large and statistically significant effect of State** (F = 152.68, df = 50, p \< 2e-16), indicating that average homelessness proportions differ substantially across states. There is also a **significant effect of Year** (F = 39.09, df = 1, p = 6.33 × 10⁻¹⁰), meaning that homelessness rates have changed over time from 2007–2024. The F-value for State is much larger than for Year, suggesting that **geographic differences between states explain more variation in homelessness than the national trend over time**.
+
+Taken together, the maps and ANOVA results show that homelessness in the United States is shaped by both **where** people live and **when** the data are observed. However, **state-to-state differences are particularly strong**, with a consistent concentration of higher homelessness proportions in certain coastal states compared to much lower levels in many interior states.
+
+```{r, echo=FALSE}
+# compare prop_homelessness per state - 2007 to 2024
+library(dplyr)
+library(usmap)
+library(ggplot2)
+library(scales)
+
+# function for map
+plot_homeless_map <- function(data, year) {
+  map_data <- data |>
+    filter(Year == year) |>
+    rename(state = State)
+
+  plot_usmap(data = map_data,
+             values = "prop_homeless",
+             regions = "states",
+             color = "white") +
+    scale_fill_viridis_c(
+      option = "plasma",
+      labels = percent_format(accuracy = 0.1),
+      name = "Proportion\nhomeless"
+    ) +
+    labs(
+      title = paste("Homelessness Proportion by State (", year, ")", sep = ""),
+      subtitle = "Higher proportions shown in yellow; lower in purple."
+    ) +
+    theme(legend.position = "right")
+}
+
+# 2007 map
+plot_homeless_map(homeless_subset, 2007)
+
+# 2024 map
+plot_homeless_map(homeless_subset, 2024)
+```
+
+```{r, echo=FALSE, include=FALSE}
+# stats
+anova = aov(prop_homeless ~ State + Year, data = homeless_subset)
+summary(anova)
+```
+
+## Reproducibility
+
+To ensure that my analysis was fully reproducible, I organized my code and workflow so that all results can be regenerated directly from the raw data. All data cleaning, transformations, visualizations, and statistical tests were performed within the R Markdown file, allowing the entire project to be reproduced by simply knitting the document. I also confirmed that my code was reproducible with one of my friends.
+
+## Choice Elements
+
+-   **Element 1: Use 5 or more in-line codes.**\
+    Throughout my report, I incorporated multiple in-line R code expressions to dynamically reference key values from my dataset, including the number of rows and columns in the merged dataset, total observations, summary statistics, and specific numeric results from statistical tests. Using in-line code ensures that my written explanations automatically update whenever the underlying data changes.
+-   **Element 2: Join one or more datasets.**\
+    I combined two separate datasets:\
+    1.  the HUD Point-in-Time homeless counts by state and year, and\
+    2.  the historical state population dataset retrieved from GitHub (originally from the U.S. Census).\
+        These were joined by state and year to create a single merged dataset containing both homelessness counts and population information, allowing me to calculate homelessness rates and carry out meaningful comparisons across states and time.
+-   **Element 3: Create at least two new variables.**\
+    During data preparation, I created several new variables of interest, including:
+    -   `prop_homeless` — the proportion of each state's population experiencing homelessness.
+
+    -   `prop_sheltered_of_total` and `prop_unsheltered_of_total` — percentages of sheltered vs. unsheltered individuals within each state’s homeless population.\
+        These new variables were central to my analyses and visualizations.
+-   **Element 4: Format or parse a date variable.** I formatted the `Year` variable to ensure it was treated as a numeric/date-like variable suitable for grouping and plotting over time. Proper formatting allowed for time-based trend analysis such as comparing sheltered versus unsheltered proportions from 2007 to 2024.
+-   **Element 5: Write and use a user-written function with at least two arguments.**\
+    I created a custom function, `plot_homeless_map(data, year)`, which takes both a dataset and a year as arguments. This function automatically filters the dataset for the selected year and generates a choropleth map of homelessness proportions by state. Using this function allowed me to easily create consistent maps for different years (e.g., 2007 and 2024) with a single line of code.
+
+## Conclusion
+
+My analysis of homelessness in the United States from 2007 to 2024 reveals several important patterns in both the level and distribution of homelessness across states. One of the most consistent findings was that **sheltered homelessness remains substantially more common than unsheltered homelessness nationwide**, a result supported by both visualization and the paired t-test showing a large, statistically significant difference between the two proportions. Over time, the proportion of people experiencing homelessness who are sheltered has generally **increased**, especially after 2015, although there were noticeable fluctuations around 2020–2022. These patterns align with national policy changes that emphasized rapid rehousing, emergency shelter expansions, and pandemic-related funding.
+
+Geographically, the maps showed that **states differ dramatically in their homelessness proportions**, and the ANOVA confirmed that state-level variation is not only present but the single strongest predictor in the model. States like California, Hawaii, Washington, and New York consistently have the highest proportions, while many Midwestern and Southern states remain on the lower end. This was expected based on public reporting and housing market pressures, but the magnitude of the differences—over triple in some cases—highlights how unevenly homelessness is distributed across the country.
+
+When examining structural factors like the number of Continuums of Care (CoCs), the results showed **weak but statistically detectable relationships**. A small positive correlation exists between the number of CoCs and the overall homelessness rate, and the multivariate plots suggested diverging trends: sheltered proportions tend to slightly decline as CoC count increases, while unsheltered proportions tend to increase. These effects were weaker than expected, but they indicate that fragmented or highly urbanized service systems may experience different challenges in managing unsheltered homelessness.
+
+Taken together, these results suggest that **homelessness is shaped far more by long-term structural conditions—housing markets, population density, local policy—than by simple administrative factors like the number of CoCs**. The dataset also shows clear evidence of national trends, such as a post-2015 rise in homelessness and sharp pandemic-era shifts.
+
+Overall, the findings provide a meaningful, data-driven picture of homelessness in the United States and highlight both the progress made and the substantial disparities that persist across states.
+
+## References
+
+“Understanding the Problem of Homelessness.” *FUSION Federal Way*, 23 Oct. 2023, fusionhousing.org/understanding-the-problem-of-homelessness/.
+
+“Point-In-Time Count and Housing Inventory Count.” *Hudexchange.info*, 2024, www.hudexchange.info/programs/hdx/pit-hic/#pit-count-and-hic-data-and-reports.
+
+JoshData. “Historical-State-Population-Csv/Historical_state_population_by_year.csv at Primary · JoshData/Historical-State-Population-Csv.” *GitHub*, 2019, github.com/JoshData/historical-state-population-csv/blob/primary/historical_state_population_by_year.csv.
