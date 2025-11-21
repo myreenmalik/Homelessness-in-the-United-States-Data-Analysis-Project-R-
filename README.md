@@ -38,9 +38,3 @@ All analysis is done in **R** using an **R Markdown** workflow:
 - `Project2.Rmd` – Main R Markdown file with full analysis, code, and narrative.
 - `Project2.html` – Knitted HTML report generated from the R Markdown file.
 - `data/` – (Optional) Folder containing the raw or cleaned datasets, or scripts to download them.
-
-## How to Reproduce
-
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/your-username/your-repo-name.git
